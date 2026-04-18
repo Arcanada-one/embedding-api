@@ -3,8 +3,10 @@
 import os
 import time
 import logging
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from config import MAX_BATCH_SIZE, MAX_COLBERT_BATCH, MAX_INPUT_LENGTH, MODEL_ID, USE_FP16
@@ -13,7 +15,23 @@ from model import encode_dense, encode_sparse, encode_colbert, encode_hybrid, ge
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("embedding-api")
 
-app = FastAPI(title="Embedding API", version="2.0.0")
+app = FastAPI(title="Embedding API", version="2.1.0")
+
+# ── Per-worker metrics (reset on restart) ───────────────────────────
+_metrics: dict[str, list[float] | int] = defaultdict(lambda: 0)
+_latencies: dict[str, list[float]] = defaultdict(list)
+MAX_LATENCY_SAMPLES = 1000
+
+
+def _record(endpoint: str, duration: float) -> None:
+    _metrics[f"{endpoint}_count"] += 1
+    bucket = _latencies[endpoint]
+    bucket.append(duration)
+    if len(bucket) > MAX_LATENCY_SAMPLES:
+        del bucket[: len(bucket) - MAX_LATENCY_SAMPLES]
+
+
+# ── Models ──────────────────────────────────────────────────────────
 
 
 class EmbeddingRequest(BaseModel):
@@ -66,6 +84,9 @@ class HybridResponse(BaseModel):
     usage: Usage
 
 
+# ── Helpers ─────────────────────────────────────────────────────────
+
+
 def _parse_input(req: EmbeddingRequest, max_batch: int = MAX_BATCH_SIZE) -> list[str]:
     texts = [req.input] if isinstance(req.input, str) else req.input
     if len(texts) == 0:
@@ -85,6 +106,9 @@ def _usage(texts: list[str]) -> Usage:
     return Usage(prompt_tokens=total_tokens, total_tokens=total_tokens)
 
 
+# ── Lifecycle ───────────────────────────────────────────────────────
+
+
 @app.on_event("startup")
 def startup():
     logger.info(f"Loading model: {MODEL_ID} (fp16={USE_FP16})")
@@ -93,9 +117,13 @@ def startup():
     logger.info(f"Model loaded in {time.time()-t0:.1f}s, dim={get_dimension()}")
 
 
+# ── Health & Ops ────────────────────────────────────────────────────
+
+
 @app.get("/health")
 def health():
     import psutil
+
     proc = psutil.Process(os.getpid())
     ram_mb = round(proc.memory_info().rss / 1024 / 1024)
     return {
@@ -107,12 +135,56 @@ def health():
     }
 
 
+@app.post("/v1/warmup")
+def warmup():
+    """Encode a dummy text to warm CPU caches after cold start."""
+    t0 = time.time()
+    encode_dense(["warmup"])
+    duration = time.time() - t0
+    return {"status": "warm", "warmup_ms": round(duration * 1000)}
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def metrics():
+    """Prometheus-compatible metrics."""
+    lines = []
+    lines.append("# HELP embedding_requests_total Total embedding requests per endpoint")
+    lines.append("# TYPE embedding_requests_total counter")
+    for endpoint in ["dense", "sparse", "colbert", "hybrid"]:
+        count = _metrics.get(f"{endpoint}_count", 0)
+        lines.append(f'embedding_requests_total{{endpoint="{endpoint}"}} {count}')
+
+    lines.append("# HELP embedding_latency_seconds Embedding latency percentiles")
+    lines.append("# TYPE embedding_latency_seconds gauge")
+    for endpoint in ["dense", "sparse", "colbert", "hybrid"]:
+        bucket = _latencies.get(endpoint, [])
+        if bucket:
+            s = sorted(bucket)
+            n = len(s)
+            p50 = s[int(n * 0.5)] if n > 0 else 0
+            p95 = s[int(n * 0.95)] if n > 0 else 0
+            p99 = s[min(int(n * 0.99), n - 1)] if n > 0 else 0
+            lines.append(f'embedding_latency_seconds{{endpoint="{endpoint}",quantile="0.5"}} {p50:.4f}')
+            lines.append(f'embedding_latency_seconds{{endpoint="{endpoint}",quantile="0.95"}} {p95:.4f}')
+            lines.append(f'embedding_latency_seconds{{endpoint="{endpoint}",quantile="0.99"}} {p99:.4f}')
+
+    lines.append("# HELP embedding_errors_total Total errors")
+    lines.append("# TYPE embedding_errors_total counter")
+    lines.append(f'embedding_errors_total {_metrics.get("errors", 0)}')
+    return "\n".join(lines) + "\n"
+
+
+# ── Embedding endpoints ─────────────────────────────────────────────
+
+
 @app.post("/v1/embeddings", response_model=EmbeddingResponse)
 def create_embeddings(req: EmbeddingRequest):
     texts = _parse_input(req)
     t0 = time.time()
     embeddings = encode_dense(texts)
-    logger.info(f"Dense: {len(texts)} texts in {time.time()-t0:.3f}s")
+    duration = time.time() - t0
+    _record("dense", duration)
+    logger.info(f"Dense: {len(texts)} texts in {duration:.3f}s")
     return EmbeddingResponse(
         data=[EmbeddingData(embedding=emb, index=i) for i, emb in enumerate(embeddings)],
         model=MODEL_ID,
@@ -125,7 +197,9 @@ def create_sparse_embeddings(req: EmbeddingRequest):
     texts = _parse_input(req)
     t0 = time.time()
     sparse = encode_sparse(texts)
-    logger.info(f"Sparse: {len(texts)} texts in {time.time()-t0:.3f}s")
+    duration = time.time() - t0
+    _record("sparse", duration)
+    logger.info(f"Sparse: {len(texts)} texts in {duration:.3f}s")
     return SparseResponse(
         data=[SparseData(sparse_weights={str(k): float(v) for k, v in s.items()}, index=i) for i, s in enumerate(sparse)],
         model=MODEL_ID,
@@ -138,7 +212,9 @@ def create_colbert_embeddings(req: EmbeddingRequest):
     texts = _parse_input(req, max_batch=MAX_COLBERT_BATCH)
     t0 = time.time()
     colbert = encode_colbert(texts)
-    logger.info(f"ColBERT: {len(texts)} texts in {time.time()-t0:.3f}s")
+    duration = time.time() - t0
+    _record("colbert", duration)
+    logger.info(f"ColBERT: {len(texts)} texts in {duration:.3f}s")
     return {
         "object": "list",
         "data": [{"colbert_vecs": vecs, "index": i} for i, vecs in enumerate(colbert)],
@@ -152,7 +228,9 @@ def create_hybrid_embeddings(req: EmbeddingRequest):
     texts = _parse_input(req, max_batch=MAX_COLBERT_BATCH)
     t0 = time.time()
     result = encode_hybrid(texts)
-    logger.info(f"Hybrid: {len(texts)} texts in {time.time()-t0:.3f}s")
+    duration = time.time() - t0
+    _record("hybrid", duration)
+    logger.info(f"Hybrid: {len(texts)} texts in {duration:.3f}s")
     return HybridResponse(
         data=[
             HybridData(
@@ -170,5 +248,7 @@ def create_hybrid_embeddings(req: EmbeddingRequest):
 
 if __name__ == "__main__":
     import uvicorn
+
     from config import BIND_HOST, BIND_PORT
+
     uvicorn.run(app, host=BIND_HOST, port=BIND_PORT)
