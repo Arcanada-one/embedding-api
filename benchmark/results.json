@@ -1,0 +1,67 @@
+[
+  {
+    "model_id": "BAAI/bge-m3",
+    "short": "bge-m3",
+    "dimension": 1024,
+    "latency_single_p50_ms": 118.3,
+    "latency_single_p95_ms": 156.1,
+    "latency_batch32_ms": 1054.8,
+    "throughput_single": 8.45,
+    "throughput_batch32": 23.7,
+    "ram_mb": 914.0,
+    "avg_cross_lingual_sim": 0.8869,
+    "status": "ok"
+  },
+  {
+    "model_id": "Alibaba-NLP/gte-multilingual-base",
+    "short": "gte-multi",
+    "dimension": 0,
+    "latency_single_p50_ms": 0,
+    "latency_single_p95_ms": 0,
+    "latency_batch32_ms": 0,
+    "throughput_single": 0,
+    "throughput_batch32": 0,
+    "ram_mb": 0,
+    "avg_cross_lingual_sim": 0,
+    "status": "error: index 1373308176 is out of bounds for dimension 0 with size 3"
+  },
+  {
+    "model_id": "nomic-ai/nomic-embed-text-v1.5",
+    "short": "nomic-v1.5",
+    "dimension": 768,
+    "latency_single_p50_ms": 60.4,
+    "latency_single_p95_ms": 87.7,
+    "latency_batch32_ms": 1070.1,
+    "throughput_single": 16.55,
+    "throughput_batch32": 16.82,
+    "ram_mb": 893.0,
+    "avg_cross_lingual_sim": 0.61,
+    "status": "ok"
+  },
+  {
+    "model_id": "nomic-ai/nomic-embed-text-v2-moe",
+    "short": "nomic-v2-moe",
+    "dimension": 768,
+    "latency_single_p50_ms": 86.5,
+    "latency_single_p95_ms": 91.8,
+    "latency_batch32_ms": 393.4,
+    "throughput_single": 11.56,
+    "throughput_batch32": 45.75,
+    "ram_mb": 3286.0,
+    "avg_cross_lingual_sim": 0.7816,
+    "status": "ok"
+  },
+  {
+    "model_id": "ai-sage/Giga-Embeddings-instruct",
+    "short": "giga-emb",
+    "dimension": 0,
+    "latency_single_p50_ms": 0,
+    "latency_single_p95_ms": 0,
+    "latency_batch32_ms": 0,
+    "throughput_single": 0,
+    "throughput_batch32": 0,
+    "ram_mb": 0,
+    "avg_cross_lingual_sim": 0,
+    "status": "error: 'default'"
+  }
+]
