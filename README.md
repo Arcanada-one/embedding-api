@@ -13,6 +13,8 @@ OpenAI-compatible self-hosted embedding API powered by [BAAI/bge-m3](https://hug
 - **FP16** for ~2x RAM savings with minimal quality loss
 - **Multi-worker** uvicorn for parallel request handling
 - **Health endpoint** with RAM monitoring — `/health`
+- **Prometheus metrics** — `/metrics`
+- **Warmup probe** — `/v1/warmup`
 
 ## Quick Start
 
@@ -68,7 +70,7 @@ Environment variables (prefix-free):
 | `EMBEDDING_FP16` | `true` | Use FP16 (~2x RAM savings) |
 | `EMBEDDING_MAX_BATCH` | `64` | Max batch size (dense/sparse) |
 | `EMBEDDING_MAX_COLBERT_BATCH` | `16` | Max batch size (ColBERT/hybrid) |
-| `EMBEDDING_MAX_LENGTH` | `32768` | Max input length (chars) |
+| `EMBEDDING_MAX_LENGTH` | `24000` | Max input length (chars) |
 
 ## Resource Usage
 
@@ -79,6 +81,12 @@ Environment variables (prefix-free):
 | 3 | ~6.9 GB | ~3x |
 
 Each worker holds its own copy of the model.
+
+## Deployment status
+
+Version 2.1.0 is deployed on the Tailscale-only Arcana-KB service. The live
+OpenAPI document exposes the four embedding modes plus health, metrics, and
+warmup routes. This repository does not provide a public internet endpoint.
 
 ## License
 

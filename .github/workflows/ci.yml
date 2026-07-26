@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install quality tools
+        run: python -m pip install --disable-pip-version-check ruff==0.12.11 pip-audit==2.9.0
+
+      - name: Lint, format, and test
+        run: |
+          set -euo pipefail
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m compileall -q config.py main.py model.py tests
+          python -m unittest discover -s tests -v
+
+      - name: Audit runtime requirements
+        run: python -m pip_audit -r requirements.txt

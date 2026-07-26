@@ -18,7 +18,7 @@
 
 ## Infrastructure
 
-- Server: arcana-db (135.181.222.38), Tailscale IP 100.70.137.104
+- Server: arcana-kb (135.181.222.38), Tailscale IP 100.70.137.104
 - Port: 8300
 - systemd: `embedding-api.service`
 - Code: `/opt/embedding-api/`
