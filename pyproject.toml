@@ -1,6 +1,6 @@
 [project]
 name = "embedding-api"
-version = "2.0.0"
+version = "2.1.0"
 description = "OpenAI-compatible self-hosted embedding API with BGE-M3 (dense + sparse + ColBERT)"
 readme = "README.md"
 license = "MIT"
@@ -20,6 +20,7 @@ dependencies = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+extend-exclude = ["benchmark"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

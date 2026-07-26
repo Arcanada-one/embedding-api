@@ -1,8 +1,8 @@
 """OpenAI-compatible embedding API server with sparse + ColBERT support."""
 
+import logging
 import os
 import time
-import logging
 from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
@@ -10,7 +10,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from config import MAX_BATCH_SIZE, MAX_COLBERT_BATCH, MAX_INPUT_LENGTH, MODEL_ID, USE_FP16
-from model import encode_dense, encode_sparse, encode_colbert, encode_hybrid, get_dimension, get_model
+from model import encode_colbert, encode_dense, encode_hybrid, encode_sparse, get_dimension, get_model
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("embedding-api")
@@ -114,7 +114,7 @@ def startup():
     logger.info(f"Loading model: {MODEL_ID} (fp16={USE_FP16})")
     t0 = time.time()
     get_model()
-    logger.info(f"Model loaded in {time.time()-t0:.1f}s, dim={get_dimension()}")
+    logger.info(f"Model loaded in {time.time() - t0:.1f}s, dim={get_dimension()}")
 
 
 # ── Health & Ops ────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ def metrics():
 
     lines.append("# HELP embedding_errors_total Total errors")
     lines.append("# TYPE embedding_errors_total counter")
-    lines.append(f'embedding_errors_total {_metrics.get("errors", 0)}')
+    lines.append(f"embedding_errors_total {_metrics.get('errors', 0)}")
     return "\n".join(lines) + "\n"
 
 
@@ -201,7 +201,10 @@ def create_sparse_embeddings(req: EmbeddingRequest):
     _record("sparse", duration)
     logger.info(f"Sparse: {len(texts)} texts in {duration:.3f}s")
     return SparseResponse(
-        data=[SparseData(sparse_weights={str(k): float(v) for k, v in s.items()}, index=i) for i, s in enumerate(sparse)],
+        data=[
+            SparseData(sparse_weights={str(k): float(v) for k, v in weights.items()}, index=index)
+            for index, weights in enumerate(sparse)
+        ],
         model=MODEL_ID,
         usage=_usage(texts),
     )
