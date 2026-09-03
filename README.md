@@ -94,7 +94,7 @@ Each worker holds its own copy of the model.
 
 ## Deployment status
 
-Version 2.2.0 is deployed on the Tailscale-only Arcana-KB service. The live
+Version 2.2.1 is deployed on the Tailscale-only Arcana-KB service. The live
 OpenAPI document exposes five embedding modes plus health, metrics, and
 warmup routes. This repository does not provide a public internet endpoint.
 
