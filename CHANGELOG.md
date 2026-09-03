@@ -2,6 +2,12 @@
 
 All notable changes to Embedding API are documented here.
 
+## [2.2.1] - 2026-09-04
+
+- Updated FlagEmbedding to 1.4.2, Uvicorn to 0.52.4, and Gunicorn to 26.2.0.
+- Kept the canonical repository and the workspace deployment mirror on the
+  same tested dependency set.
+
 ## [2.2.0] - 2026-09-03
 
 - Added `/v1/embeddings/dense-sparse`, returning the exact ordered dense and

@@ -23,7 +23,7 @@ from model import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("embedding-api")
 
-app = FastAPI(title="Embedding API", version="2.2.0")
+app = FastAPI(title="Embedding API", version="2.2.1")
 
 # ── Per-worker metrics (reset on restart) ───────────────────────────
 _metrics: dict[str, list[float] | int] = defaultdict(lambda: 0)
