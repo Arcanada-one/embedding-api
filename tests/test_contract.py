@@ -30,6 +30,14 @@ class PublicContractTest(unittest.TestCase):
         for endpoint in ("/health", "/metrics", "/v1/warmup"):
             self.assertIn(endpoint, readme)
 
+    def test_dense_sparse_endpoint_is_shipped_and_documented(self) -> None:
+        source = (ROOT / "main.py").read_text()
+        readme = (ROOT / "README.md").read_text()
+
+        self.assertIn('@app.post("/v1/embeddings/dense-sparse"', source)
+        self.assertIn("response_model=DenseSparseResponse", source)
+        self.assertIn("/v1/embeddings/dense-sparse", readme)
+
 
 if __name__ == "__main__":
     unittest.main()
