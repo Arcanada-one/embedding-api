@@ -10,12 +10,20 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from config import MAX_BATCH_SIZE, MAX_COLBERT_BATCH, MAX_INPUT_LENGTH, MODEL_ID, USE_FP16
-from model import encode_colbert, encode_dense, encode_hybrid, encode_sparse, get_dimension, get_model
+from model import (
+    encode_colbert,
+    encode_dense,
+    encode_dense_sparse,
+    encode_hybrid,
+    encode_sparse,
+    get_dimension,
+    get_model,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("embedding-api")
 
-app = FastAPI(title="Embedding API", version="2.1.0")
+app = FastAPI(title="Embedding API", version="2.2.0")
 
 # ── Per-worker metrics (reset on restart) ───────────────────────────
 _metrics: dict[str, list[float] | int] = defaultdict(lambda: 0)
@@ -51,6 +59,12 @@ class SparseData(BaseModel):
     index: int
 
 
+class DenseSparseData(BaseModel):
+    dense: list[float]
+    sparse_weights: dict[str, float]
+    index: int
+
+
 class HybridData(BaseModel):
     dense: list[float]
     sparse_weights: dict[str, float]
@@ -73,6 +87,13 @@ class EmbeddingResponse(BaseModel):
 class SparseResponse(BaseModel):
     object: str = "list"
     data: list[SparseData]
+    model: str
+    usage: Usage
+
+
+class DenseSparseResponse(BaseModel):
+    object: str = "list"
+    data: list[DenseSparseData]
     model: str
     usage: Usage
 
@@ -150,13 +171,13 @@ def metrics():
     lines = []
     lines.append("# HELP embedding_requests_total Total embedding requests per endpoint")
     lines.append("# TYPE embedding_requests_total counter")
-    for endpoint in ["dense", "sparse", "colbert", "hybrid"]:
+    for endpoint in ["dense", "dense_sparse", "sparse", "colbert", "hybrid"]:
         count = _metrics.get(f"{endpoint}_count", 0)
         lines.append(f'embedding_requests_total{{endpoint="{endpoint}"}} {count}')
 
     lines.append("# HELP embedding_latency_seconds Embedding latency percentiles")
     lines.append("# TYPE embedding_latency_seconds gauge")
-    for endpoint in ["dense", "sparse", "colbert", "hybrid"]:
+    for endpoint in ["dense", "dense_sparse", "sparse", "colbert", "hybrid"]:
         bucket = _latencies.get(endpoint, [])
         if bucket:
             s = sorted(bucket)
@@ -192,6 +213,28 @@ def create_embeddings(req: EmbeddingRequest):
     )
 
 
+@app.post("/v1/embeddings/dense-sparse", response_model=DenseSparseResponse)
+def create_dense_sparse_embeddings(req: EmbeddingRequest):
+    texts = _parse_input(req)
+    t0 = time.time()
+    result = encode_dense_sparse(texts)
+    duration = time.time() - t0
+    _record("dense_sparse", duration)
+    logger.info(f"Dense+sparse: {len(texts)} texts in {duration:.3f}s")
+    return DenseSparseResponse(
+        data=[
+            DenseSparseData(
+                dense=result["dense"][index],
+                sparse_weights={str(token): float(weight) for token, weight in result["sparse"][index].items()},
+                index=index,
+            )
+            for index in range(len(texts))
+        ],
+        model=MODEL_ID,
+        usage=_usage(texts),
+    )
+
+
 @app.post("/v1/embeddings/sparse", response_model=SparseResponse)
 def create_sparse_embeddings(req: EmbeddingRequest):
     texts = _parse_input(req)
@@ -202,8 +245,7 @@ def create_sparse_embeddings(req: EmbeddingRequest):
     logger.info(f"Sparse: {len(texts)} texts in {duration:.3f}s")
     return SparseResponse(
         data=[
-            SparseData(sparse_weights={str(k): float(v) for k, v in weights.items()}, index=index)
-            for index, weights in enumerate(sparse)
+            SparseData(sparse_weights={str(k): float(v) for k, v in s.items()}, index=i) for i, s in enumerate(sparse)
         ],
         model=MODEL_ID,
         usage=_usage(texts),

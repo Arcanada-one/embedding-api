@@ -7,6 +7,7 @@ OpenAI-compatible self-hosted embedding API powered by [BAAI/bge-m3](https://hug
 ## Features
 
 - **Dense embeddings** (1024d) — `/v1/embeddings` (OpenAI-compatible)
+- **Dense + sparse embeddings** (one model pass) — `/v1/embeddings/dense-sparse`
 - **Sparse embeddings** (lexical weights) — `/v1/embeddings/sparse`
 - **ColBERT multi-vector** — `/v1/embeddings/colbert`
 - **Hybrid** (dense + sparse + ColBERT in one call) — `/v1/embeddings/hybrid`
@@ -21,7 +22,7 @@ OpenAI-compatible self-hosted embedding API powered by [BAAI/bge-m3](https://hug
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8300 --workers 3
+gunicorn main:app --workers 2 --worker-class uvicorn_worker.UvicornWorker --bind 127.0.0.1:8300
 ```
 
 ## API
@@ -32,6 +33,14 @@ uvicorn main:app --host 0.0.0.0 --port 8300 --workers 3
 curl -X POST http://localhost:8300/v1/embeddings \
   -H 'Content-Type: application/json' \
   -d '{"input": "Your text here"}'
+```
+
+### Dense + Sparse (one model pass)
+
+```bash
+curl -X POST http://localhost:8300/v1/embeddings/dense-sparse \
+  -H 'Content-Type: application/json' \
+  -d '{"input": ["First text", "Second text"]}'
 ```
 
 ### Sparse Embeddings
@@ -69,6 +78,7 @@ Environment variables (prefix-free):
 | `EMBEDDING_PORT` | `8300` | Bind port |
 | `EMBEDDING_FP16` | `true` | Use FP16 (~2x RAM savings) |
 | `EMBEDDING_MAX_BATCH` | `64` | Max batch size (dense/sparse) |
+| `EMBEDDING_INFERENCE_BATCH` | `8` | Per-worker microbatch cap |
 | `EMBEDDING_MAX_COLBERT_BATCH` | `16` | Max batch size (ColBERT/hybrid) |
 | `EMBEDDING_MAX_LENGTH` | `24000` | Max input length (chars) |
 
@@ -84,8 +94,8 @@ Each worker holds its own copy of the model.
 
 ## Deployment status
 
-Version 2.1.0 is deployed on the Tailscale-only Arcana-KB service. The live
-OpenAPI document exposes the four embedding modes plus health, metrics, and
+Version 2.2.0 is deployed on the Tailscale-only Arcana-KB service. The live
+OpenAPI document exposes five embedding modes plus health, metrics, and
 warmup routes. This repository does not provide a public internet endpoint.
 
 ## License
